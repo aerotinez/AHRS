@@ -67,10 +67,10 @@ ahrs.MagCal();
 % bias vector and as a 3x3 scaling matrix for the soft iron bias
 ```
 ### TODO:
--[x] quaternion-based extended kalman filter `EKF.m`
--[ ] add end & pause buttons to `UI.m` 
--[ ] add bias estimation & compensation to `EKF.m`
--[ ] complementary filter
--[ ] mahony filter
--[ ] madgwick filter
--[ ] UKF?
+- [x] quaternion-based extended kalman filter `EKF.m`
+- [ ] add end & pause buttons to `UI.m` 
+- [ ] add bias estimation & compensation to `EKF.m`
+- [ ] complementary filter
+- [ ] mahony filter
+- [ ] madgwick filter
+- [ ] UKF?
