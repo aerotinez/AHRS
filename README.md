@@ -35,7 +35,7 @@ ahrs.SetIMU(imu);
 ahrs.RunUI();
 ```
 ### Filtering a dataset offline
-Want to filter a set of MPU-9250 readings offline? No problem! Make sure your sensor data is stored in n-by-3 matrices and use the `.Run()` method of the filter you wish to use! The filtered result is output as an n-by-3 matrix of Tait-Bryan/Euler angles in degrees ordered as `[roll, pitch, yaw]`. Make sure to set the sample time for your data in your chosen filter using `ahrs.SetSampleTime(<your sample time here>)`
+Want to filter a set of MPU-9250 readings offline? No problem! Make sure your sensor data is stored in n-by-3 matrices and use the `.Run()` method of the filter you wish to use! The filtered result is output as an n-by-3 matrix of Tait-Bryan/Euler angles in degrees ordered as `[roll, pitch, yaw]`. Make sure to set the sample time for your data in your chosen filter using `ahrs.SetSampleTime(<your sample time here>)`.
 
 ```matlab
 ahrs = EKF();
@@ -66,3 +66,11 @@ ahrs.MagCal();
 % the resulting calibrations will be given in microTesla for the hard iron
 % bias vector and as a 3x3 scaling matrix for the soft iron bias
 ```
+### TODO:
+-[x] quaternion-based extended kalman filter `EKF.m`
+-[ ] add end & pause buttons to `UI.m` 
+-[ ] add bias estimation & compensation to `EKF.m`
+-[ ] complementary filter
+-[ ] mahony filter
+-[ ] madgwick filter
+-[ ] UKF?
