@@ -23,7 +23,7 @@ addpath("<~/path-to-/AHRS/src/>");
 a = arduino('<your-serial-port>', '<your-board>', 'Libraries', 'I2C');
 ts = 0.01;  % sample time
 fs = 1/ts;  % sample frequency (rate)
-imu = mpu9250(a, 'SampleRate', fs, 'SamplesPerRead', 1, 'OutputFormat', 'matrix', 'ReadMode', 'Latest');
+imu = mpu9250(a, 'SampleRate', fs, 'SamplesPerRead', 1, 'OutputFormat', 'matrix');
 
 % call the ekf
 ahrs = EKF();
