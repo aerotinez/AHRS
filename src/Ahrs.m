@@ -136,15 +136,9 @@ classdef (Abstract) Ahrs < handle
     
     methods (Abstract)
         % methods to be uniquely defined for each ahrs algorithm
-        Run(obj);
-        RunUI(obj);
-        Plot(obj);
-    end
-    
-    methods (Abstract, Access = protected)
-        % the filter method of each supeclass implements its core ahrs
-        % algorithm
         Filter(obj);
+        StartUI(obj);
+        Plot(obj);
     end
     
     methods (Access = protected)

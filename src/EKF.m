@@ -17,31 +17,84 @@ classdef EKF < Ahrs
     end
     
     methods
-        function rpy = Run(obj, accel, gyro, mag)
-            a = accel;
-            g = gyro;
-            m = mag;
-            
-            % number of samples
-            n = length(a);
-            
-            % array to hold filtered results
-            rpy = zeros(n,3);
-            
-            % initial quaternion
-            q = obj.InitQuat(a(1,:), m(1,:));
-            X = obj.CheckColVec(q);
-            
-            % initial error covariance matrix
-            P = eye(4,4);
-            
-            % begin extended kalman filtering
-            for i = 1:1:n
-                [rpy(i,:), X, P] = obj.Filter(a(i,:), g(i,:), m(i,:), X, P);
+        function varargout = Filter(obj, varargin)
+
+            % number of arguments minus the object
+            nargs = nargin - 1;
+
+            if nargs < 3 || nargs == 4
+                error("Not enough input arguments");
+            elseif nargs == 3
+                % number of samples
+                n = length(a);
+                
+                % array to hold filtered results
+                rpy = zeros(n,3);
+                
+                % initial quaternion
+                q = obj.InitQuat(a(1,:), m(1,:));
+                X = obj.CheckColVec(q);
+                
+                % initial error covariance matrix
+                P = eye(4,4);
+                
+                % begin extended kalman filtering
+                for i = 1:1:n
+                    [rpy(i,:), X, P] = Run(a(i,:), g(i,:), m(i,:), X, P);
+                end
+
+                varargout{1} = rpy;
+
+            elseif nargs == 5
+                [rpy, X_new, P_new] = Run(accel, gyro, mag, X, P);
+                varargout{1} = rpy;
+                varargout{2} = X_new;
+                varargout{3} = P_new;
+            else
+                error("Too many input arguments");
+            end
+
+            function [rpy, X_new, P_new] = Run(accel, gyro, mag, X, P)
+                % pre-process dataset to align IMU and magnetometer axes
+                [a, g, m] = obj.PreprocessMeasurements(accel, gyro, mag);
+                
+                % extended kalman filtering
+                
+                % a priori state
+                Xa = obj.ProcessModel(g, X);
+
+                % a priori error covariance matrix
+                F = obj.ProcessJacobian(g);
+                Q = obj.ProcessCovariance(Xa);
+                Pa = F*P*(F.') + Q;
+
+                % correction
+                z = [a, m].';
+                h = obj.MeasurementModel(Xa);
+                H = obj.MeasurementJacobian(Xa);
+
+                % innovation
+                R = obj.MeasurementCovariance(X, a, m);
+                S = H*Pa*(H.') + R;
+
+                % kalman gain
+                K = (Pa*(H.'))/S;
+
+                % a posteriori state
+                X = Xa + K*(z - h);
+
+                % a posteriori error covariance matrix
+                P_new = Pa - K*H*Pa;
+
+                % normalize state (quaternion)
+                X_new = obj.NormVec(X_new);
+                
+                % extract euler angles
+                rpy = obj.QuatToTaitBryan(X_new);
             end
         end
         
-        function ui = RunUI(obj)
+        function ui = StartUI(obj)
             if isempty(obj.imu)
                 error('No mpu9250 object has been set up');
             end
@@ -144,48 +197,7 @@ classdef EKF < Ahrs
             end
         end
     end
-    
-    methods (Access = protected)
-        function [rpy, X_new, P_new] = Filter(obj, accel, gyro, mag, X, P)
-            % pre-process dataset to align IMU and magnetometer axes
-            [a, g, m] = obj.PreprocessMeasurements(accel, gyro, mag);
-            
-            % extended kalman filtering
-            
-            % a priori state
-            Xa = obj.ProcessModel(g, X);
 
-            % a priori error covariance matrix
-            F = obj.ProcessJacobian(g);
-            Q = obj.ProcessCovariance(Xa);
-            Pa = F*P*(F.') + Q;
-
-            % correction
-            z = [a, m].';
-            h = obj.MeasurementModel(Xa);
-            H = obj.MeasurementJacobian(Xa);
-
-            % innovation
-            R = obj.MeasurementCovariance(X, a, m);
-            S = H*Pa*(H.') + R;
-
-            % kalman gain
-            K = (Pa*(H.'))/S;
-
-            % a posteriori state
-            X = Xa + K*(z - h);
-
-            % a posteriori error covariance matrix
-            P_new = Pa - K*H*Pa;
-
-            % normalize state (quaternion)
-            X_new = obj.NormVec(X_new);
-            
-            % extract euler angles
-            rpy = obj.QuatToTaitBryan(X_new);
-        end
-    end
-    
     methods (Access = private)
         function W = Omega(obj, w)
             w = obj.CheckColVec(w);

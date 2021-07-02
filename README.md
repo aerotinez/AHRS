@@ -13,7 +13,7 @@ This repository is for anyone wishing to try out the MPU-9250 9-axis IMU + magne
 Make sure you have the [MATLAB support package for Arduino hardware](https://uk.mathworks.com/help/supportpkg/arduinoio/index.html?s_tid=CRUX_lftnav) installed. Follow [these tutorials](https://uk.mathworks.com/help/supportpkg/arduinoio/get-started-with-matlab-support-package-for-arduino-hardware.html) to learn how to set up your Arduino in MATLAB and [this tutorial from MathWorks](https://uk.mathworks.com/help/fusion/ug/Estimating-Orientation-Using-Inertial-Sensor-Fusion-and-MPU-9250.html) to learn how to connect your MPU-9250 to your Arduino board. Clone this repository and your ready to go!
 
 ### Using the user interface
-Each algorithm has a `.RunUI()` method which displays a real-time animation of your connected MPU-9250. For example, to use run UI with the Extended Kalman Filter ahrs you could do:
+Each algorithm has a `.StartUI()` method which displays a real-time animation of your connected MPU-9250. For example, to use run UI with the Extended Kalman Filter ahrs you could do:
 
 ```matlab
 % don't forget to add the source code to your path
@@ -32,14 +32,14 @@ ahrs = EKF();
 ahrs.SetIMU(imu);
 
 % call the UI and enjoy!
-ahrs.RunUI();
+ahrs.StartUI();
 ```
 ### Filtering a dataset offline
-Want to filter a set of MPU-9250 readings offline? No problem! Make sure your sensor data is stored in n-by-3 matrices and use the `.Run()` method of the filter you wish to use! The filtered result is output as an n-by-3 matrix of Tait-Bryan/Euler angles in degrees ordered as `[roll, pitch, yaw]`. Make sure to set the sample time for your data in your chosen filter using `ahrs.SetSampleTime(<your sample time here>)`.
+Want to filter a set of MPU-9250 readings offline? No problem! Make sure your sensor data is stored in n-by-3 matrices and use the `.Filter()` method of the filter you wish to use! The filtered result is output as an n-by-3 matrix of Tait-Bryan/Euler angles in degrees ordered as `[roll, pitch, yaw]`. Make sure to set the sample time for your data in your chosen filter using `ahrs.SetSampleTime(<your sample time here>)`.
 
 ```matlab
 ahrs = EKF();
-filtered_data = ahrs.Run(accel_data, gyro_data, mag_data);
+filtered_data = ahrs.Filter(accel_data, gyro_data, mag_data);
 ```
 Additionally, once you have your filtered data, you can plot it using `.Plot()` and even compare it with data from another filtering method.
 ```matlab
