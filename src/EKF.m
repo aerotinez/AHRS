@@ -5,9 +5,9 @@ classdef EKF < Ahrs
     
     properties (GetAccess = public, SetAccess = protected)
         % sensor noise standard deviations
-        sigma_a (1,1) double = 1e-03;
-        sigma_g (1,1) double = 9e-04;
-        sigma_m (1,1) double = 5e-03;
+        sigma_a (1,1) double = 0.1;
+        sigma_g (1,1) double = 0.3;
+        sigma_m (1,1) double = 0.7;
         
         % environmental constants
         % in NED frame (m/s^2)
@@ -28,9 +28,16 @@ classdef EKF < Ahrs
             % array to hold filtered results
             rpy = zeros(n,3);
             
+            % initial quaternion
+            q = obj.InitializeQuaternion(a(1,:), m(1,:));
+            X = obj.CheckColVec(q);
+            
+            % initial error covariance matrix
+            P = eye(4,4);
+            
             % begin extended kalman filtering
             for i = 1:1:n
-                rpy(i,:) = obj.Filter(a(i,:), g(i,:), m(i,:));
+                [rpy(i,:), X, P] = obj.Filter(a(i,:), g(i,:), m(i,:), X, P);
             end
         end
         
@@ -42,11 +49,20 @@ classdef EKF < Ahrs
             ui = UI();
             tf = 1000;
             t = 0;
+            
+            % initial quaternion
+            [a, ~, m] = read(obj.imu);
+            q = obj.InitializeQuaternion(a, m);
+            X = obj.CheckColVec(q);
+            
+            % initial error covariance matrix
+            P = eye(4,4);
+            
             while t < tf
                 % read imu
                 [a, g, m] = read(obj.imu);
                 % filter readings
-                rpy = obj.Filter(a, g, m);
+                [rpy, X, P]  = obj.Filter(a, g, m, X, P);
                 % extract roll, pitch & yaw
                 roll = deg2rad(rpy(1,1));
                 pitch = deg2rad(rpy(1,2));
@@ -130,23 +146,9 @@ classdef EKF < Ahrs
     end
     
     methods (Access = protected)
-        function rpy = Filter(obj, accel, gyro, mag)
+        function [rpy, X_new, P_new] = Filter(obj, accel, gyro, mag, X, P)
             % pre-process dataset to align IMU and magnetometer axes
             [a, g, m] = obj.PreprocessMeasurements(accel, gyro, mag);
-            
-            % state vector
-            persistent X;
-            if isempty(X)
-                % initialize orientation
-                q = obj.InitializeQuaternion(a, m);
-                X = obj.CheckColVec(q);
-            end
-            
-            % error covariance matrix
-            persistent P;
-            if isempty(P)
-                P = eye(4,4);
-            end
             
             % extended kalman filtering
             
@@ -174,13 +176,13 @@ classdef EKF < Ahrs
             X = Xa + K*(z - h);
 
             % a posteriori error covariance matrix
-            P = Pa - K*H*Pa;
+            P_new = Pa - K*H*Pa;
 
             % normalize state (quaternion)
-            X = X./norm(X);
-
+            X_new = X./norm(X);
+            
             % extract euler angles
-            [roll, pitch, yaw] = obj.QuaternionToTaitBryan(X);
+            [roll, pitch, yaw] = obj.QuaternionToTaitBryan(X_new);
             rpy = [roll, pitch, yaw];
         end
     end
