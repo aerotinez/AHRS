@@ -72,7 +72,7 @@ ahrs.MagCal();
 - [x] quaternion-based extended kalman filter `EKF.m`
 - [ ] add end & pause buttons to `UI.m` 
 - [ ] add bias estimation & compensation to `EKF.m`
-- [ ] complementary filter
+- [x] complementary filter
 - [ ] mahony filter
 - [ ] madgwick filter
 - [ ] UKF?
