@@ -49,6 +49,8 @@ clearvars fig;
 % plot your most recently filtered data against other baseline data to compare filter performace
 fig = ahrs.Plot(filtered_data, other_filtered_data);
 ```
+![offline dataset filtering using ekf example](https://github.com/aerotinez/AHRS/blob/master/docs/offline_ekf_test.png?raw=true)
+
 ### MPU-9250 magnetometer calibration
 You can calibrate your MPU-9250's magnetometer for hard and soft iron biases by simply calling the `.MagCal()` method of any AHRS algorithm in `/src/`!
 ```matlab
