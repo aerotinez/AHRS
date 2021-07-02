@@ -1,13 +1,20 @@
-classdef EKF < Ahrs
+classdef EKF2 < Ahrs
     
     % Extended Kalman Filter for MPU-9250 AHRS
     % Martin L Pryde MSc
+    %
+    % based on the model described in:
+    % https://openimu.readthedocs.io/en/latest/algorithms/KalmanFilter.html
     
     properties (GetAccess = public, SetAccess = protected)
+        % sensor process noises
+        sigma_ap (1,1) = 0;
+        sigma_mp (1,1) = 0;
+        
         % sensor noise standard deviations
-        sigma_a (1,1) double = 0.1;
-        sigma_g (1,1) double = 0.3;
-        sigma_m (1,1) double = 0.7;
+        sigma_a (1,1) double = 5e-02;
+        sigma_g (1,1) double = 1e-03;
+        sigma_m (1,1) double = 0.8;
         
         % environmental constants
         % in NED frame (m/s^2)
@@ -17,7 +24,7 @@ classdef EKF < Ahrs
     end
     
     methods
-        function rpy = Run(obj, accel, gyro, mag)
+        function [rpy, ba, bm] = Run(obj, accel, gyro, mag)
             a = accel;
             g = gyro;
             m = mag;
@@ -28,16 +35,26 @@ classdef EKF < Ahrs
             % array to hold filtered results
             rpy = zeros(n,3);
             
-            % initial quaternion
-            q = obj.InitQuat(a(1,:), m(1,:));
-            X = obj.CheckColVec(q);
+            % array to hold accel biases
+            ba = zeros(n,3);
+            
+            % array to hold gyro biases
+            bm = zeros(n,3);
+            
+            % initial state vector
+            q_init = obj.InitializeQuaternion(accel(1,:), mag(1,:));
+            ba_init = 0.25.*[1, 1, 1];
+            bm_init = [1, 1, 1];
+            X = [q_init, ba_init, bm_init].';
             
             % initial error covariance matrix
-            P = eye(4,4);
+            P = eye(10,10);
             
             % begin extended kalman filtering
             for i = 1:1:n
-                [rpy(i,:), X, P] = obj.Filter(a(i,:), g(i,:), m(i,:), X, P);
+                [rpy(i,:), ba(i,:), bm(i,:), X_new, P_new] = obj.Filter(a(i,:), g(i,:), m(i,:), X, P);
+                X = X_new;
+                P = P_new;
             end
         end
         
@@ -49,20 +66,11 @@ classdef EKF < Ahrs
             ui = UI();
             tf = 1000;
             t = 0;
-            
-            % initial quaternion
-            [a, ~, m] = read(obj.imu);
-            q = obj.InitQuat(a, m);
-            X = obj.CheckColVec(q);
-            
-            % initial error covariance matrix
-            P = eye(4,4);
-            
             while t < tf
                 % read imu
                 [a, g, m] = read(obj.imu);
                 % filter readings
-                [rpy, X, P]  = obj.Filter(a, g, m, X, P);
+                rpy = obj.Filter(a, g, m);
                 % extract roll, pitch & yaw
                 roll = deg2rad(rpy(1,1));
                 pitch = deg2rad(rpy(1,2));
@@ -122,31 +130,31 @@ classdef EKF < Ahrs
                 orange = [0.8500, 0.3250, 0.0980];
                 yellow = [0.9290, 0.6940, 0.1250];
                 
-                l = plot(ax, time, rpy_ekf);
-                l(1).LineWidth = 2;
-                l(2).LineWidth = 2;
-                l(3).LineWidth = 2;
-                l(1).Color = blue;
-                l(2).Color = orange;
-                l(3).Color = yellow;
+                l_ekf = plot(ax, time, rpy_ekf);
+                l_ekf(1).LineWidth = 2;
+                l_ekf(2).LineWidth = 2;
+                l_ekf(3).LineWidth = 2;
+                l_ekf(1).Color = blue;
+                l_ekf(2).Color = orange;
+                l_ekf(3).Color = yellow;
             end
             function PlotTrueData(ax, time, rpy_true)
-                l = plot(ax, time, rpy_true);
-                l(1).LineWidth = 2;
-                l(2).LineWidth = 2;
-                l(3).LineWidth = 2;
-                l(1).LineStyle = ':';
-                l(2).LineStyle = ':';
-                l(3).LineStyle = ':';
-                l(1).Color = 'k';
-                l(2).Color = 'k';
-                l(3).Color = 'k';
+                l_true = plot(ax, time, rpy_true);
+                l_true(1).LineWidth = 2;
+                l_true(2).LineWidth = 2;
+                l_true(3).LineWidth = 2;
+                l_true(1).LineStyle = ':';
+                l_true(2).LineStyle = ':';
+                l_true(3).LineStyle = ':';
+                l_true(1).Color = 'k';
+                l_true(2).Color = 'k';
+                l_true(3).Color = 'k';
             end
         end
     end
     
     methods (Access = protected)
-        function [rpy, X_new, P_new] = Filter(obj, accel, gyro, mag, X, P)
+        function [rpy, ba, bm, X_new, P_new] = Filter(obj, accel, gyro, mag, X, P)
             % pre-process dataset to align IMU and magnetometer axes
             [a, g, m] = obj.PreprocessMeasurements(accel, gyro, mag);
             
@@ -173,16 +181,22 @@ classdef EKF < Ahrs
             K = (Pa*(H.'))/S;
 
             % a posteriori state
-            X = Xa + K*(z - h);
+            X_new = Xa + K*(z - h);
 
             % a posteriori error covariance matrix
             P_new = Pa - K*H*Pa;
 
             % normalize state (quaternion)
-            X_new = obj.NormVec(X_new);
+            X_new(1:4) = X_new(1:4)./norm(X_new(1:4));
             
+            % extract quaternion & biases
+            q = obj.CheckRowVec(X_new(1:4));
+            ba = obj.CheckRowVec(X_new(5:7));
+            bm = obj.CheckRowVec(X_new(8:10));
+
             % extract euler angles
-            rpy = obj.QuatToTaitBryan(X_new);
+            [roll, pitch, yaw] = obj.QuaternionToTaitBryan(q);
+            rpy = [roll, pitch, yaw];
         end
     end
     
@@ -192,14 +206,29 @@ classdef EKF < Ahrs
             W = [obj.Skew(w), w; -w.', 0];
         end
         
-        function f = ProcessModel(obj, w, q)
+        function f = ProcessModel(obj, w, X)
+            % extract quaternion
+            q = X(1:4);
             q = q./norm(q);
             q = obj.CheckColVec(q);
-            f = (eye(4,4) + (0.5*obj.sample_time).*obj.Omega(w))*q;
+            
+            % extract biases
+            ba = X(5:7); % accel bias
+            bm = X(8:10); % gyro bias
+            
+            % 4x1 quaternion nonlinear model
+            fq = (eye(4,4) + (0.5*obj.sample_time).*obj.Omega(w))*q;
+            
+            % form 10x1 nonlinear model
+            f = [fq; ba; bm];
         end
         
         function F = ProcessJacobian(obj, w)
-            F = (eye(4,4) + (0.5*obj.sample_time).*obj.Omega(w));
+            % quaternion process jacobian
+            Fq = (eye(4,4) + (0.5*obj.sample_time).*obj.Omega(w));
+            
+            % full 10x10 process jacobian
+            F = [Fq, zeros(4,6); zeros(6,4), eye(6,6)];
         end
         
         function Q = ProcessCovariance(obj, q)
@@ -218,18 +247,29 @@ classdef EKF < Ahrs
 
             Sigma_g = obj.sigma_g^2.*eye(3,3);
 
-            Q = W*Sigma_g*(W.');
+            Qq = W*Sigma_g*(W.');
+            Qa = obj.sample_time*(obj.sigma_ap^2).*eye(3,3);
+            Qg = obj.sample_time*(obj.sigma_mp^2).*eye(3,3);
+            
+            Q = [Qq, zeros(4,6); 
+                zeros(3,4), Qa, zeros(3,3);
+                zeros(3,7), Qg];
         end
         
-        function h = MeasurementModel(obj, q)
+        function h = MeasurementModel(obj, X)
+            q = obj.CheckColVec(X(1:4));
+            ba = obj.CheckColVec(X(5:7));
+            bm = obj.CheckColVec(X(8:10));
+
             g = obj.CheckColVec(obj.local_earth_gravity);
             r = obj.CheckColVec(obj.local_earth_magnetic_field);
-            C = obj.QuatToDCM(q); % earth->body
+            C = obj.QuaternionToDCM(q); % earth->body
 
-            h = [C*g; C*r];
+            h = [C*g; C*r] + [ba; bm];
         end
         
-        function H = MeasurementJacobian(obj, q)
+        function H = MeasurementJacobian(obj, X)
+            q = obj.CheckColVec(X(1:4));
             g = obj.local_earth_gravity;
             r = obj.local_earth_magnetic_field;
             
@@ -277,20 +317,22 @@ classdef EKF < Ahrs
             h63 = qw*rx - qy*rz + qz*ry;
             h64 = qx*rx + qy*ry + qz*rz;
             
-            H = 2*[h11, h12, h13, h14;
+            Hq = 2*[h11, h12, h13, h14;
                 h21, h22, h23, h24;
                 h31, h32, h33, h34;
                 h41, h42, h43, h44;
                 h51, h52, h53, h54;
                 h61, h62, h63, h64];
+            
+            H = [Hq, eye(6,6)];
         end
         
         function R = MeasurementCovariance(obj, q, accel, mag)
             % normalize inputes
-            a = obj.NormVec(accel);
-            m = obj.NormVec(mag);
-            g = obj.NormVec(obj.local_earth_gravity);
-            r = obj.NormVec(obj.local_earth_magnetic_field);
+            a = NormVec(accel);
+            m = NormVec(mag);
+            g = NormVec(obj.local_earth_gravity);
+            r = NormVec(obj.local_earth_magnetic_field);
 
             % acceleration gating test
             %
@@ -318,7 +360,7 @@ classdef EKF < Ahrs
 
             m = obj.CheckColVec(m);
 
-            C = obj.QuatToDCM(q).'; % body->earth
+            C = obj.QuaternionToDCM(q).'; % body->earth
 
             m_est = C*m;
             a_est = C*a;
@@ -340,6 +382,10 @@ classdef EKF < Ahrs
             Ra = (Sigma_a^2).*eye(3,3);
             Rm = (Sigma_m^2).*eye(3,3);
             R = [Ra, zeros(3,3); zeros(3,3), Rm];
+
+            function v_out = NormVec(v_in)
+                v_out = v_in./norm(v_in);
+            end
         end
     end
 end

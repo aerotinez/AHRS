@@ -163,10 +163,10 @@ classdef (Abstract) Ahrs < handle
             a = [-a(:,2), -a(:,1), a(:,3)];
             g = [g(:,2), g(:,1), -g(:,3)];
         end
-        function q = InitializeQuaternion(obj, accel, mag)
+        function q = InitQuat(obj, accel, mag)
             % normalize readings
-            a = accel./norm(accel);
-            m = mag./norm(mag);
+            a = obj.NormVec(accel);
+            m = obj.NormVec(mag);
 
             a = obj.CheckRowVec(a);
             m = obj.CheckRowVec(m);
@@ -194,7 +194,7 @@ classdef (Abstract) Ahrs < handle
             q = angle2quat(yaw, pitch, roll);
 
             % normalize
-            q = q./norm(q);
+            q = obj.NormQuat(q);
 
             % rotation matrices
             function R = xrot(a)
@@ -212,7 +212,7 @@ classdef (Abstract) Ahrs < handle
                     S, 0, C];
             end
         end
-        function dcm = QuaternionToDCM(obj, q)
+        function dcm = QuatToDCM(obj, q)
             % converts earth->body quaternion to earth->body dcm
             q = obj.CheckRowVec(q);
 
@@ -239,7 +239,7 @@ classdef (Abstract) Ahrs < handle
                 q21, q22, q23;
                 q31, q32, q33];
         end
-        function [roll, pitch, yaw] = QuaternionToTaitBryan(obj, q)
+        function rpy = QuatToTaitBryan(obj, q)
             % take earth->body quaternion and convert to tait-bryan euler angles in
             % degrees
 
@@ -254,6 +254,8 @@ classdef (Abstract) Ahrs < handle
             roll = rad2deg(roll);
             pitch = rad2deg(pitch);
             yaw = rad2deg(yaw);
+
+            rpy = [roll, pitch, yaw];
         end
     end
     
@@ -298,6 +300,12 @@ classdef (Abstract) Ahrs < handle
             else
                 data_out = data_in;
             end
+        end
+        function q_out = NormQuat(q_in)
+            q_out = q_in./norm(q_in);
+        end
+        function v_out = NormVec(v_in)
+            v_out = v_in./v_in;
         end
     end
 end
