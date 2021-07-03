@@ -10,6 +10,13 @@ classdef (Abstract) Ahrs < handle
         hard_iron_bias (1,3) double = [-3.8236, 140.6495, -170.3542];
         soft_iron_bias (3,3) double = [1.0034, 0.0112, 0.0142; 0.0112, 1.0593, 0.0186; 0.0142, 0.0186, 0.9414];
     end
+  
+    methods (Abstract)
+        % methods to be uniquely defined for each ahrs algorithm
+        Filter(obj);
+        StartUI(obj);
+        Plot(obj);
+    end
     
     methods
         % set methods for object properties 
@@ -133,14 +140,7 @@ classdef (Abstract) Ahrs < handle
             disp(A);
         end
     end
-    
-    methods (Abstract)
-        % methods to be uniquely defined for each ahrs algorithm
-        Filter(obj);
-        StartUI(obj);
-        Plot(obj);
-    end
-    
+
     methods (Access = protected)
         % methods common to all algorithms but not to be displayed to be
         % made available to the user
