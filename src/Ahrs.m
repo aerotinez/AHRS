@@ -1,5 +1,4 @@
 classdef (Abstract) Ahrs < handle
-    
     %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Attitude and Heading Reference System (AHRS)
     % Martin L Pryde MSc
