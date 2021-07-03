@@ -9,7 +9,7 @@ load("mahony_filtered_dataset.mat");
 
 %%
 ahrs = EKF;
-rpy = ahrs.Run(accel, gyro, mag);
+rpy = ahrs.Filter(accel, gyro, mag);
 fig = ahrs.Plot(rpy, rpy_mahony);
 path = fullfile('~','AHRS', 'docs', 'offline_ekf_test.png');
 saveas(fig, path);
