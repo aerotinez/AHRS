@@ -141,7 +141,7 @@ classdef (Abstract) Ahrs < handle
         end
     end
 
-    methods (Access = protected)
+    methods (Access = public)
         % methods common to all algorithms but not to be displayed to be
         % made available to the user
         function [a, g, m] = PreprocessMeasurements(obj, accel, gyro, mag)
@@ -161,10 +161,7 @@ classdef (Abstract) Ahrs < handle
             % normalize readings
             a = obj.NormVec(accel);
             m = obj.NormVec(mag);
-
-            a = obj.CheckRowVec(a);
-            m = obj.CheckRowVec(m);
-
+            
             % sort accel readings
             ax = a(1,1);
             ay = a(1,2);
@@ -174,37 +171,23 @@ classdef (Abstract) Ahrs < handle
             roll = atan2(ay, az);
             pitch = atan2(-ax, ay*sin(roll) + az*cos(roll));
 
-            % rotate measured mag field into earth frame
-            b = (yrot(-pitch)*xrot(-roll)*(m.')).';
-
-            % sort mag readings
-            bx = b(1,1);
-            by = b(1,2);
-
+            % compute b-vector
+            Cr = cos(roll);
+            Sr = sin(roll);
+            Cp = cos(pitch);
+            Sp = sin(pitch);
+            
+            R = [Cp, Sp*Sr, Sp*Cr; 0, Cr, -Sr; -Sp, Cp*Sr, Cp*Cr];
+            b = R*obj.CheckColVec(m);
+            
             % get yaw
-            yaw = atan2(-by, bx);
-
-            % convert to earth->body quaternion
-            q = angle2quat(yaw, pitch, roll);
-
-            % normalize
+            bx = b(1);
+            by = b(2);
+            yaw = atan2(-by,bx);
+            
+            q = angle2quat(yaw, pitch, roll, 'ZYX');
+            q = obj.CheckRowVec(q);
             q = obj.NormQuat(q);
-
-            % rotation matrices
-            function R = xrot(a)
-                C = cos(a);
-                S = sin(a);
-                R = [1, 0, 0;
-                    0, C, S;
-                    0, -S, C];
-            end
-            function R = yrot(a)
-                C = cos(a);
-                S = sin(a);
-                R = [C, 0, -S;
-                    0, 1, 0;
-                    S, 0, C];
-            end
         end
         function dcm = QuatToDCM(obj, q)
             % converts earth->body quaternion to earth->body dcm
@@ -238,7 +221,7 @@ classdef (Abstract) Ahrs < handle
             % degrees
 
             % normalize input quaternion
-            q = q./norm(q);
+            q = obj.NormQuat(q);
             q = obj.CheckRowVec(q);
             
             % convert to tait-bryan angles
@@ -268,10 +251,12 @@ classdef (Abstract) Ahrs < handle
             % the input is returned unchanged. If the input is a row
             % vector, the vector is returned as a column vector.
             [rows, columns] = size(v_in);
-            if columns > rows
+            if rows == 1
                 v_out = v_in.';
-            else
+            elseif columns == 1
                 v_out = v_in;
+            else
+                error("Input is not a vector");
             end
         end
         function v_out = CheckRowVec(v_in)
@@ -279,10 +264,12 @@ classdef (Abstract) Ahrs < handle
             % the input is returned unchanged. If the input is a column
             % vector, the vector is returned as a row vector.
             [rows, columns] = size(v_in);
-            if rows > columns
+            if columns == 1
                 v_out = v_in.';
-            else
+            elseif rows == 1
                 v_out = v_in;
+            else
+                error("Input is not a vector");
             end
         end
         function data_out = CheckDataDim(data_in)
@@ -299,7 +286,7 @@ classdef (Abstract) Ahrs < handle
             q_out = q_in./norm(q_in);
         end
         function v_out = NormVec(v_in)
-            v_out = v_in./v_in;
+            v_out = v_in./norm(v_in);
         end
     end
 end

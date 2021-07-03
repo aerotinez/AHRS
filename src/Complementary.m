@@ -9,61 +9,44 @@ classdef Complementary < Ahrs
     end
 
     methods (Access = public)
-
         function varargout = Filter(obj, varargin)
             % number of input arguments minus object
             nargs = nargin - 1;
+            
+            accel = varargin{1};
+            gyro = varargin{2};
+            mag = varargin{3};
+            
+            [accel, gyro, mag] = obj.PreprocessMeasurements(accel, gyro, mag);
 
             if nargs < 3
                 error("Not enough input arguments");
             elseif nargs == 3
-                a = varargin{1}; % accel
-                g = varargin{2}; % gyro
-                m = varargin{3}; % mag
-
                 % number of samples
-                n = length(a);
+                n = length(accel);
                 
                 % array to hold filtered results
                 rpy = zeros(n,3);
                 
                 % initial quaternion
-                q = obj.InitQuat(a(1,:), m(1,:));
+                q = obj.InitQuat(accel(1,:), mag(1,:));
 
                 for i = 1:1:n
-                    [rpy(i,:), q] = Run(a(i,:), g(i,:), m(i,:), q);
+                    [rpy(i,:), q] = obj.Main(accel(i,:), gyro(i,:), mag(i,:), q);
                 end
 
                 varargout{1} = rpy;
             elseif nargs == 4
-                [rpy, q] = Run(a, g, m, q_init);
+                q_init = varargin{4};
+                
+                [rpy, q] = obj.Main(accel, gyro, mag, q_init);
+                
                 varargout{1} = rpy;
                 varargout{2} = q;
             else
                 error("Too many input arguments");
             end
-
-            function [rpy, q] = Run(a, g, m, q_init);
-                [a, g, m] = obj.PreprocessMeasurements(accel, gyro, mag, q);
-
-                % get quaternion from gyro (dead reckoning)
-                W = [obj.Skew(g), g.'; - g, 0];
-                qdot = 0.5*W*obj.CheckColVec(q);
-                qg = q + qdot*obj.sample_time;
-                qg = obj.NormQuat(qg);
-
-                % get quaternion from accel & mag
-                qam = obj.InitQuat(a, m);
-
-                % perform complementary filtering
-                q = (1 - obj.k)*qg + obj.k*qam;
-                q = obj.NormQuat(q);
-
-                % convert to tait-bryan angles
-                rpy = obj.QuatToTaitBryan(q);
-            end
         end
-
         function ui = StartUI(obj)
             if isempty(obj.imu)
                 error('No mpu9250 object has been set up');
@@ -74,12 +57,10 @@ classdef Complementary < Ahrs
             t = 0;
             
             % initial quaternion
-            [a, ~, m] = read(obj.imu);
+            [a, g, m] = read(obj.imu);
+            [a, ~, m] = obj.PreprocessMeasurements(a, g, m);
             q = obj.InitQuat(a, m);
 
-            % initial error covariance matrix
-            P = eye(4,4);
-            
             while t < tf
                 % read imu
                 [a, g, m] = read(obj.imu);
@@ -98,10 +79,9 @@ classdef Complementary < Ahrs
                 pause(obj.sample_time);
             end
         end
-
         function fig = Plot(obj, varargin)
-            rpy_ekf = varargin{1};
-            n = length(rpy_ekf);
+            rpy_comp = varargin{1};
+            n = length(rpy_comp);
             tf = n*obj.sample_time;
             
             time = linspace(0,tf,n);
@@ -112,7 +92,7 @@ classdef Complementary < Ahrs
             ax = axes(fig);
 
             % lables
-            title('ekf estimated orientation');
+            title('complementary estimated orientation');
             xlabel('time (seconds)');
             ylabel('orientation (degrees)');
             hold on;
@@ -120,9 +100,9 @@ classdef Complementary < Ahrs
             if nargin == 1
                 error("Not enough input arguments");
             elseif nargin == 2
-                PlotEKFData(ax, time, rpy_ekf);
+                PlotCompData(ax, time, rpy_comp);
             elseif nargin == 3
-                rpy_ekf = varargin{1};
+                rpy_comp = varargin{1};
                 rpy_true = varargin{2};
                 PlotTrueData(ax, time, rpy_true);
                 PlotComplementaryData(ax, time, rpy_comp)
@@ -164,6 +144,39 @@ classdef Complementary < Ahrs
                 l(2).Color = 'k';
                 l(3).Color = 'k';
             end
+        end
+        function SetFilterGain(obj, gain)
+            if gain > 1
+                error("complementary filter gain must be a scalar in the range 0 - 1");
+            end
+            obj.k = gain;
+        end
+    end
+    methods (Access = private)
+        function [rpy, q] = Main(obj, accel, gyro, mag, q_init)
+            a = accel;
+            g = gyro;
+            m = mag;
+            
+            q = obj.CheckColVec(q_init);
+            
+            % get quaternion from gyro (dead reckoning)
+            W = [obj.Skew(g), g.'; - g, 0];
+            qdot = 0.5*W*q;
+            qg = q + qdot*obj.sample_time;
+            qg = obj.NormQuat(qg);
+            qg = obj.CheckRowVec(qg);
+
+            % get quaternion from accel & mag
+            qam = obj.InitQuat(a, m);
+            qam = obj.CheckRowVec(qam);
+
+            % perform complementary filtering
+            q = (1 - obj.k).*qg + obj.k.*qam;
+            q = obj.NormQuat(q);
+
+            % convert to tait-bryan angles
+            rpy = obj.QuatToTaitBryan(q);
         end
     end
 end

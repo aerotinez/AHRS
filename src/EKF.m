@@ -6,8 +6,8 @@ classdef EKF < Ahrs
     properties (GetAccess = public, SetAccess = protected)
         % sensor noise standard deviations
         sigma_a (1,1) double = 0.1;
-        sigma_g (1,1) double = 0.3;
-        sigma_m (1,1) double = 0.7;
+        sigma_g (1,1) double = 0.2;
+        sigma_m (1,1) double = 0.8;
         
         % environmental constants
         % in NED frame (m/s^2)
@@ -18,6 +18,11 @@ classdef EKF < Ahrs
     
     methods
         function varargout = Filter(obj, varargin)
+            accel = varargin{1};
+            gyro = varargin{2};
+            mag = varargin{3};
+            
+            [accel, gyro, mag] = obj.PreprocessMeasurements(accel, gyro, mag);
 
             % number of arguments minus the object
             nargs = nargin - 1;
@@ -26,13 +31,13 @@ classdef EKF < Ahrs
                 error("Not enough input arguments");
             elseif nargs == 3
                 % number of samples
-                n = length(a);
+                n = length(accel);
                 
                 % array to hold filtered results
                 rpy = zeros(n,3);
                 
                 % initial quaternion
-                q = obj.InitQuat(a(1,:), m(1,:));
+                q = obj.InitQuat(accel(1,:), mag(1,:));
                 X = obj.CheckColVec(q);
                 
                 % initial error covariance matrix
@@ -40,60 +45,23 @@ classdef EKF < Ahrs
                 
                 % begin extended kalman filtering
                 for i = 1:1:n
-                    [rpy(i,:), X, P] = Run(a(i,:), g(i,:), m(i,:), X, P);
+                    [rpy(i,:), X, P] = obj.Main(accel(i,:), gyro(i,:), mag(i,:), X, P);
                 end
 
                 varargout{1} = rpy;
-
             elseif nargs == 5
-                [rpy, X_new, P_new] = Run(accel, gyro, mag, X, P);
+                X = varargin{4};
+                P = varargin{5};
+                
+                [rpy, X_new, P_new] = obj.Main(accel, gyro, mag, X, P);
+                
                 varargout{1} = rpy;
                 varargout{2} = X_new;
                 varargout{3} = P_new;
             else
                 error("Too many input arguments");
             end
-
-            function [rpy, X_new, P_new] = Run(accel, gyro, mag, X, P)
-                % pre-process dataset to align IMU and magnetometer axes
-                [a, g, m] = obj.PreprocessMeasurements(accel, gyro, mag);
-                
-                % extended kalman filtering
-                
-                % a priori state
-                Xa = obj.ProcessModel(g, X);
-
-                % a priori error covariance matrix
-                F = obj.ProcessJacobian(g);
-                Q = obj.ProcessCovariance(Xa);
-                Pa = F*P*(F.') + Q;
-
-                % correction
-                z = [a, m].';
-                h = obj.MeasurementModel(Xa);
-                H = obj.MeasurementJacobian(Xa);
-
-                % innovation
-                R = obj.MeasurementCovariance(X, a, m);
-                S = H*Pa*(H.') + R;
-
-                % kalman gain
-                K = (Pa*(H.'))/S;
-
-                % a posteriori state
-                X = Xa + K*(z - h);
-
-                % a posteriori error covariance matrix
-                P_new = Pa - K*H*Pa;
-
-                % normalize state (quaternion)
-                X_new = obj.NormVec(X_new);
-                
-                % extract euler angles
-                rpy = obj.QuatToTaitBryan(X_new);
-            end
         end
-        
         function ui = StartUI(obj)
             if isempty(obj.imu)
                 error('No mpu9250 object has been set up');
@@ -104,7 +72,8 @@ classdef EKF < Ahrs
             t = 0;
             
             % initial quaternion
-            [a, ~, m] = read(obj.imu);
+            [a, g, m] = read(obj.imu);
+            [a, ~, m] = obj.PreprocessMeasurements(a, g, m);
             q = obj.InitQuat(a, m);
             X = obj.CheckColVec(q);
             
@@ -129,7 +98,6 @@ classdef EKF < Ahrs
                 pause(obj.sample_time);
             end
         end
-        
         function fig = Plot(obj, varargin)
             rpy_ekf = varargin{1};
             n = length(rpy_ekf);
@@ -203,17 +171,14 @@ classdef EKF < Ahrs
             w = obj.CheckColVec(w);
             W = [obj.Skew(w), w; -w.', 0];
         end
-        
         function f = ProcessModel(obj, w, q)
             q = q./norm(q);
             q = obj.CheckColVec(q);
             f = (eye(4,4) + (0.5*obj.sample_time).*obj.Omega(w))*q;
         end
-        
         function F = ProcessJacobian(obj, w)
             F = (eye(4,4) + (0.5*obj.sample_time).*obj.Omega(w));
         end
-        
         function Q = ProcessCovariance(obj, q)
             qw = q(1);
             qx = q(2);
@@ -232,7 +197,6 @@ classdef EKF < Ahrs
 
             Q = W*Sigma_g*(W.');
         end
-        
         function h = MeasurementModel(obj, q)
             g = obj.CheckColVec(obj.local_earth_gravity);
             r = obj.CheckColVec(obj.local_earth_magnetic_field);
@@ -240,7 +204,6 @@ classdef EKF < Ahrs
 
             h = [C*g; C*r];
         end
-        
         function H = MeasurementJacobian(obj, q)
             g = obj.local_earth_gravity;
             r = obj.local_earth_magnetic_field;
@@ -296,7 +259,6 @@ classdef EKF < Ahrs
                 h51, h52, h53, h54;
                 h61, h62, h63, h64];
         end
-        
         function R = MeasurementCovariance(obj, q, accel, mag)
             % normalize inputes
             a = obj.NormVec(accel);
@@ -352,6 +314,45 @@ classdef EKF < Ahrs
             Ra = (Sigma_a^2).*eye(3,3);
             Rm = (Sigma_m^2).*eye(3,3);
             R = [Ra, zeros(3,3); zeros(3,3), Rm];
+        end
+        function [rpy, X_new, P_new] = Main(obj, accel, gyro, mag, X, P)
+            a = accel;
+            g = gyro;
+            m = mag;
+            
+            % extended kalman filtering
+
+            % a priori state
+            Xa = obj.ProcessModel(g, X);
+
+            % a priori error covariance matrix
+            F = obj.ProcessJacobian(g);
+            Q = obj.ProcessCovariance(Xa);
+            Pa = F*P*(F.') + Q;
+
+            % correction
+            z = [a, m].';
+            h = obj.MeasurementModel(Xa);
+            H = obj.MeasurementJacobian(Xa);
+
+            % innovation
+            R = obj.MeasurementCovariance(X, a, m);
+            S = H*Pa*(H.') + R;
+
+            % kalman gain
+            K = (Pa*(H.'))/S;
+
+            % a posteriori state
+            X_new = Xa + K*(z - h);
+
+            % a posteriori error covariance matrix
+            P_new = Pa - K*H*Pa;
+
+            % normalize state (quaternion)
+            X_new = obj.NormVec(X_new);
+
+            % extract euler angles
+            rpy = obj.QuatToTaitBryan(X_new);
         end
     end
 end
