@@ -28,7 +28,11 @@ classdef (Abstract) Ahrs < handle
         hard_iron_bias (1,3) double = [-3.8236, 140.6495, -170.3542];
 
         % soft iron (scaling) bias on magnetometer readings (dimensionless)
-        soft_iron_bias (3,3) double = [1.0034, 0.0112, 0.0142; 0.0112, 1.0593, 0.0186; 0.0142, 0.0186, 0.9414];
+        soft_iron_bias (3,3) double = [
+            1.0034, 0.0112, 0.0142; 
+            0.0112, 1.0593, 0.0186; 
+            0.0142, 0.0186, 0.9414
+            ];
     end
 
     % main methods for all ahrs superclasses
@@ -59,9 +63,13 @@ classdef (Abstract) Ahrs < handle
         function SetIMU(obj, imu)
             % imu is a MATLAB mpu9250() objects
             if imu.SamplesPerRead ~= 1
-                error("Invalid mpu9250(): <SamplesPerRead> property of input mpu9250() object must be set to 1.");
+                msg = ["Invalid mpu9250(): 'SamplesPerRead' property of " ...
+                "input mpu9250() object must be set to 1."];
+                error(msg);
             elseif imu.OutputFormat ~= "matrix"
-                error("Invalid mpu9250(): <OutputFormat> property of input mpu9250() object must be set to <'matrix'>");
+                msg = ["Invalid mpu9250(): 'OutputFormat' property of " ...
+                    "input mpu9250() object must be set to 'matrix'"];
+                error(msg);
             end
             obj.imu = imu;
             obj.sample_time = 1/obj.imu.SampleRate;
@@ -121,7 +129,9 @@ classdef (Abstract) Ahrs < handle
         function MagCal(obj)
             % check that the user has set an mpu9250() object in the class
             if isempty(obj.imu)
-                error('Set an imu object in order to begin magnetometer calibration');
+                msg = ["Set an imu object in order to begin "...
+                    "magnetometer calibration"];
+                error(msg);
             end
             
             % close all other open figures
@@ -167,7 +177,9 @@ classdef (Abstract) Ahrs < handle
             % begin experiment
             i = 1;
             clc;
-            disp("Rotate the MPU-9250 about it's axes in such a manner as to plot a sphereoid on the figure.");
+            msg = ["Rotate the MPU-9250 about it's axes in " ...
+                "such a manner as to plot a sphereoid on the figure."];
+            disp(msg);
             while i < n + 1
                 % read mpu9250
                 [~,~,m(i,:)] = read(obj.imu);
