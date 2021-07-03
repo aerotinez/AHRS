@@ -1,26 +1,64 @@
 classdef (Abstract) Ahrs < handle
     
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
     % Attitude and Heading Reference System (AHRS)
     % Martin L Pryde MSc
+    % martinpryde@ymail.com
+    % https://github.com/aerotinez/AHRS
     %
+    % This class seeks to achieve three goals:
+    % 1. It should define the layout of all superclass ahrs classes which
+    %    inherit from it.
+    % 2. It should contain any and all methods common to all ahrs superclasses.
+    %    This is to say that any future implementations of common methods should
+    %    be implemented HERE.
+    % 3. It should contain and implement any calibration tools for example, 
+    %    magnetometer calibration.
+    %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+    % user may view this object's property values but must use a .Set() method 
+    % to edit them during object lifetime.
     properties (GetAccess = public, SetAccess = protected)
-        imu; % matlab <mpu9250()> object
-        sample_time (1,1) double = 0.01; % system fundamental sample time
+        % MATLAB mpu9250() object used to read measurements from the hardware
+        imu;
+
+        % sample time for accelerometer, gyroscope and magnetometer
+        sample_time (1,1) double = 0.01;
+
+        % hard iron (additive) bias on magnetometer readings (microTesla)
         hard_iron_bias (1,3) double = [-3.8236, 140.6495, -170.3542];
+
+        % soft iron (scaling) bias on magnetometer readings (dimensionless)
         soft_iron_bias (3,3) double = [1.0034, 0.0112, 0.0142; 0.0112, 1.0593, 0.0186; 0.0142, 0.0186, 0.9414];
     end
-  
+
+    % main methods for all ahrs superclasses
     methods (Abstract)
-        % methods to be uniquely defined for each ahrs algorithm
+        % Each superclass must define these three methods
+        
+        % .Filter() can polymorphically accept a single set of measurements or
+        % can accept an nx3 matrix of measurements and output the filtered
+        % result as roll-pitch-yaw Tait-Bryan angles in degrees
         Filter(obj);
+
+        % .StartUI() reads the imu in real-time and publishes the filtered
+        % meaurements to an animated UIFigure object
         StartUI(obj);
+
+        % .Plot() can take in either a single set of filtered measurements and 
+        % plot them in on a figure or can take in two sets of measurements in 
+        % order for the user to compare filtering techniques
         Plot(obj);
     end
     
+    % set methods
     methods
-        % set methods for object properties 
+        % .SetIMU accepts a MATLAB mpu9250 object which the class will use to
+        % take real-time measurements from the MPU-9250. Once an mpu9250 has 
+        % been assigned, the object sample time is set to match the sample time
+        % of the mpu9250
         function SetIMU(obj, imu)
+            % imu is a MATLAB mpu9250() objects
             if imu.SamplesPerRead ~= 1
                 error("Invalid mpu9250(): <SamplesPerRead> property of input mpu9250() object must be set to 1.");
             elseif imu.OutputFormat ~= "matrix"
@@ -29,6 +67,10 @@ classdef (Abstract) Ahrs < handle
             obj.imu = imu;
             obj.sample_time = 1/obj.imu.SampleRate;
         end
+
+        % . SetSampleTime() allows the user to change the object sample time
+        % from the default of 0.01. However, the user may not change the sample
+        % time if an imu has been set 
         function SetSampleTime(obj, sample_time)
             if isempty(obj.imu)
                 obj.sample_time = sample_time;
@@ -36,21 +78,25 @@ classdef (Abstract) Ahrs < handle
                 error("Cannot set sample time when Ahrs.imu has been set.")
             end
         end
+
+        % SetIronBias(b) sets the Ahrs hard_iron_bias property to <b>
+        % SetIronBias(b,A) sets the Ahrs hard_iron_bias and
+        % soft_iron_bias properties to <b> and <A> respectively
         function SetIronBias(obj, varargin)
-            % SetIronBias(b) sets the Ahrs hard_iron_bias property to <b>
-            % SetIronBias(b,A) sets the Ahrs hard_iron_bias and
-            % soft_iron_bias properties to <b> and <A> respectively
-            n = nargin - 1; % number of input arguments minus the obj input
+            % number of input arguments minus the obj input
+            n = nargin - 1;
             if n == 0
                 error('Not enough input arguments');
             elseif n == 1
                 obj.hard_iron_bias = varargin{1};
+                % display the new hard iron bias in the terminal
                 clc;
                 fprintf('New Hard Iron Bias:\n\n');
                 disp(varargin{1});
             elseif n == 2
                 obj.hard_iron_bias = varargin{1};
                 obj.soft_iron_bias = varargin{2};
+                % display the new hard and soft iron biases in the terminal
                 clc;
                 fprintf('New Hard Iron Bias:\n\n');
                 disp(varargin{1});
@@ -62,19 +108,34 @@ classdef (Abstract) Ahrs < handle
         end
     end
     
+    % magnetometer calibration app
     methods (Access = public)
-        % method for calibrating magnetometer
+        % .MagCal() allows the user to accurately calibrate their MPU-9250's 
+        % magnetometer in one minute! The user must first use the .SetIMU()
+        % method to register their MPU-9250 with the class. After calling
+        % .MagCal(), a figure appears and prompts the user to move the MPU-9250
+        % about its body axes in order to gather readings from which to compute
+        % the hard and soft iron biases. The figure is left available to the
+        % user after the session has ended in order for them to check if they
+        % are satisfied with the quality of the plotted sphereoid (which is to
+        % say the distribution of the measurements)
         function MagCal(obj)
-            % check that the user has set an <mpu9250()> object in the
-            % class
+            % check that the user has set an mpu9250() object in the class
             if isempty(obj.imu)
                 error('Set an imu object in order to begin magnetometer calibration');
             end
             
-            close all; % close all other open figures
-            ts = obj.sample_time; % extract sample time from imu object
-            tf = 60; % duration of magnetometer calibration experiment
-            n = tf/ts; % number of samples to be taken during experiment
+            % close all other open figures
+            close all;
+
+            % extract sample time from imu object
+            ts = obj.sample_time;
+
+            % duration of magnetometer calibration experiment
+            tf = 60;
+
+            % number of samples to be taken during experiment
+            n = tf/ts;
             
             % congfigure plot screen
             fig = figure();
@@ -133,6 +194,8 @@ classdef (Abstract) Ahrs < handle
             % compute and set object soft & hard iron biases
             [A, b, ~] = magcal(m);
             obj.SetIronBias(b,A);
+
+            % print new iron biases to the terminal
             fprintf('Calibration complete!\n\n');
             fprintf('New Hard Iron Bias:\n\n');
             disp(b);
@@ -141,9 +204,12 @@ classdef (Abstract) Ahrs < handle
         end
     end
 
-    methods (Access = public)
-        % methods common to all algorithms but not to be displayed to be
-        % made available to the user
+    % useful quaternion and pre-processing methods for all ahrs superclasses
+    methods (Access = protected)
+        % .PreprocessMeasurments aligns the axes of readings taken by the
+        % MPU-6050 imu SOC on the MPU-9250 board with the magnetometer.
+        % WARNING: This method should only be called at the top of the .Filter
+        % and .StartUI() methods in order to avoid runtime errors
         function [a, g, m] = PreprocessMeasurements(obj, accel, gyro, mag)
             a = accel;
             g = gyro;
@@ -157,6 +223,11 @@ classdef (Abstract) Ahrs < handle
             a = [-a(:,2), -a(:,1), a(:,3)];
             g = [g(:,2), g(:,1), -g(:,3)];
         end
+
+        % .InitQuat uses the tilt algorithm in order to provide an initial
+        % estimate of the MPU-9250 orientation before filtering. Read about
+        % the tilt algorithm here: 
+        % https://ahrs.readthedocs.io/en/latest/filters/tilt.html
         function q = InitQuat(obj, accel, mag)
             % normalize readings
             a = obj.NormVec(accel);
@@ -185,13 +256,17 @@ classdef (Abstract) Ahrs < handle
             by = b(2);
             yaw = atan2(-by,bx);
             
+            % output earth->body quaternion
             q = angle2quat(yaw, pitch, roll, 'ZYX');
             q = obj.CheckRowVec(q);
             q = obj.NormQuat(q);
         end
+
+        % .QuatToDCM() converts earth->body quaternion into an earth->body
+        % direction cosine matrix (dcm). Similar to MATLAB quat2dcm()
         function dcm = QuatToDCM(obj, q)
-            % converts earth->body quaternion to earth->body dcm
             q = obj.CheckRowVec(q);
+            q = obj.QuatNorm(q);
 
             % q = [qs, qx, qy, qz] where qs is the scalar and qx, qy, and qz are
             % the vector components of the quaternion
@@ -216,10 +291,11 @@ classdef (Abstract) Ahrs < handle
                 q21, q22, q23;
                 q31, q32, q33];
         end
-        function rpy = QuatToTaitBryan(obj, q)
-            % take earth->body quaternion and convert to tait-bryan euler angles in
-            % degrees
 
+        % .QuatToTaitBryan accepts an earth->body quaternion as an argument and 
+        % converts it into a 1x3 vector of tait-bryan (ZYX) euler angles in 
+        % degrees
+        function rpy = QuatToTaitBryan(obj, q)
             % normalize input quaternion
             q = obj.NormQuat(q);
             q = obj.CheckRowVec(q);
@@ -236,45 +312,51 @@ classdef (Abstract) Ahrs < handle
         end
     end
     
+    % The following are mostly math-specific or sanity check methods 
     methods (Static, Access = protected)
-        % methods useful to all algorithms but which do not call or modify
-        % the class itself
+        % turns a vector of length 3 into a 3x3 skew-symmetric matrix
         function s = Skew(v)
-            % turns a vector of length 3 into a skew-symmetric matrix
             p = v(1);
             q = v(2);
             r = v(3);
             s = [0, -r, q; r, 0, -p; -q, p, 0];
         end
+
+        % takes in a vector. if the input is already a column vector, the input 
+        % is returned unchanged. If the input is a row vector, the vector is 
+        % returned as a column vector.
         function v_out = CheckColVec(v_in)
-            % takes in a vector. if the input is already a column vector,
-            % the input is returned unchanged. If the input is a row
-            % vector, the vector is returned as a column vector.
             [rows, columns] = size(v_in);
             if rows == 1
                 v_out = v_in.';
             elseif columns == 1
                 v_out = v_in;
             else
+                % if neither row or column dimension is equal to one the input
+                % is not a vector and an error is thrown
                 error("Input is not a vector");
             end
         end
+
+        % takes in a vector. if the input is already a row vector, the input is 
+        % returned unchanged. If the input is a column vector, the vector is 
+        % returned as a row vector.
         function v_out = CheckRowVec(v_in)
-            % takes in a vector. if the input is already a row vector,
-            % the input is returned unchanged. If the input is a column
-            % vector, the vector is returned as a row vector.
             [rows, columns] = size(v_in);
             if columns == 1
                 v_out = v_in.';
             elseif rows == 1
                 v_out = v_in;
             else
+                % if neither row or column dimension is equal to one the input
+                % is not a vector and an error is thrown
                 error("Input is not a vector");
             end
         end
+
+        % check that list of measurements entered is nx3 not 3xn. if it is 3xn, 
+        % the function returns the measurents transposed
         function data_out = CheckDataDim(data_in)
-            % check that list of measurements entered is nx3 not 3xn. if it
-            % is 3xn, the function returns the measurents transposed
             [rows, columns] = size(data_in);
             if columns > rows
                 data_out = data_in';
@@ -282,9 +364,13 @@ classdef (Abstract) Ahrs < handle
                 data_out = data_in;
             end
         end
+
+        % perform quaternion normalization in order to preserve orthogonality
         function q_out = NormQuat(q_in)
             q_out = q_in./norm(q_in);
         end
+
+        % normalizes a vector, useful for accel and mag measurements
         function v_out = NormVec(v_in)
             v_out = v_in./norm(v_in);
         end
