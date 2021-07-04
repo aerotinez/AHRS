@@ -73,6 +73,6 @@ ahrs.MagCal();
 - [ ] add end & pause buttons to `UI.m` 
 - [ ] add bias estimation & compensation to `EKF.m`
 - [x] complementary filter
-- [ ] mahony filter
+- [x] mahony filter
 - [ ] madgwick filter
 - [ ] UKF?
