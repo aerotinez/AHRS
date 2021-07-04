@@ -321,6 +321,26 @@ classdef (Abstract) Ahrs < handle
 
             rpy = [roll, pitch, yaw];
         end
+        
+        % quaternion multiplication
+        function r = QuatProd(obj, p,q)
+            pw = p(1);
+            px = p(2);
+            py = p(3);
+            pz = p(4);
+
+            qw = q(1);
+            qx = q(2);
+            qy = q(3);
+            qz = q(4);
+
+            r = [pw*qw - px*qx - py*qy - pz*qz;
+                pw*qx + px*qw + py*qz - pz*qy;
+                pw*qy - px*qz + py*qw + pz*qx;
+                pw*qz + px*qy - py*qx + pz*qw].';
+            
+            r = obj.NormQuat(r);
+        end
     end
     
     % The following are mostly math-specific or sanity check methods 
@@ -384,6 +404,17 @@ classdef (Abstract) Ahrs < handle
         % normalizes a vector, useful for accel and mag measurements
         function v_out = NormVec(v_in)
             v_out = v_in./norm(v_in);
+        end
+        
+        % quaternion conjugate, equivalent to taking the transpose of a dcm
+        % (switch from earth->body and body->earth)
+        function qconj = QuatConj(q)
+            qw = q(1);
+            qx = q(2);
+            qy = q(3);
+            qz = q(4);
+
+            qconj = [qw, -qx, -qy, -qz];
         end
     end
 end
