@@ -10,7 +10,7 @@ This repository is for anyone wishing to try out the MPU-9250 9-axis IMU + magne
 #### THIS REPO REQUIRES R2019a OR NEWER!
 
 ### Getting started
-Make sure you have the [MATLAB support package for Arduino hardware](https://uk.mathworks.com/help/supportpkg/arduinoio/index.html?s_tid=CRUX_lftnav) installed. Follow [these tutorials](https://uk.mathworks.com/help/supportpkg/arduinoio/get-started-with-matlab-support-package-for-arduino-hardware.html) to learn how to set up your Arduino in MATLAB and [this tutorial from MathWorks](https://uk.mathworks.com/help/fusion/ug/Estimating-Orientation-Using-Inertial-Sensor-Fusion-and-MPU-9250.html) to learn how to connect your MPU-9250 to your Arduino board. Clone this repository and your ready to go!
+Make sure you have the [MATLAB support package for Arduino hardware](https://uk.mathworks.com/help/supportpkg/arduinoio/index.html?s_tid=CRUX_lftnav) installed. Follow [these tutorials](https://uk.mathworks.com/help/supportpkg/arduinoio/get-started-with-matlab-support-package-for-arduino-hardware.html) to learn how to set up your Arduino in MATLAB and [this tutorial from MathWorks](https://uk.mathworks.com/help/fusion/ug/Estimating-Orientation-Using-Inertial-Sensor-Fusion-and-MPU-9250.html) to learn how to connect your MPU-9250 to your Arduino board. Clone this repository and you're ready to go!
 
 ### Using the user interface
 Each algorithm has a `.StartUI()` method which displays a real-time animation of your connected MPU-9250. For example, to use run UI with the Extended Kalman Filter ahrs you could do:
