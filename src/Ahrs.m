@@ -277,7 +277,7 @@ classdef (Abstract) Ahrs < handle
         % direction cosine matrix (dcm). Similar to MATLAB quat2dcm()
         function dcm = QuatToDCM(obj, q)
             q = obj.CheckRowVec(q);
-            q = obj.QuatNorm(q);
+            q = obj.NormQuat(q);
 
             % q = [qs, qx, qy, qz] where qs is the scalar and qx, qy, and qz are
             % the vector components of the quaternion
